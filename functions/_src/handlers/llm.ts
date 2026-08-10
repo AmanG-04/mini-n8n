@@ -8,17 +8,13 @@ export async function runLlmCall(context: StepContext): Promise<StepResult> {
     .replaceAll("{{input}}", JSON.stringify(context.input))
     .replaceAll("{{previous}}", JSON.stringify(context.previousOutput));
   const apiKey = process.env.GROQ_API_KEY;
-
-  if (!apiKey) {
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    return { output: { provider: "stub", text: `Stubbed LLM response: ${prompt}`, approved: true } };
-  }
+  if (!apiKey) throw new Error("GROQ_API_KEY is not configured for the workflow function");
 
   const response = await fetchWithRetry("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
     body: JSON.stringify({
-      model: typeof config.model === "string" ? config.model : "llama-3.3-70b-versatile",
+      model: "llama-3.3-70b-versatile",
       temperature: typeof config.temperature === "number" ? config.temperature : 0.2,
       messages: [{ role: "user", content: prompt }]
     })
@@ -28,5 +24,7 @@ export async function runLlmCall(context: StepContext): Promise<StepResult> {
   const choices = Array.isArray(body.choices) ? body.choices : [];
   const first = asRecord(choices[0] ?? null);
   const message = asRecord(first.message ?? null);
-  return { output: { provider: "groq", text: typeof message.content === "string" ? message.content : "", raw: body } };
+  const text = typeof message.content === "string" ? message.content : "";
+  if (!text) throw new Error("Groq returned no message content");
+  return { output: { provider: "groq", text, raw: body } };
 }

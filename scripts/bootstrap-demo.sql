@@ -9,6 +9,6 @@ INSERT INTO public.organizations (id, name, quota_limit) VALUES
 
 -- Create a workflow as the Org A owner through the UI, then add:
 -- 1. llm_call config: {"prompt":"Return true when this input is acceptable: {{input}}"}
--- 2. conditional_branch config: {"path":"text","equals":"..."} (or use stub's approved field)
+-- 2. conditional_branch config: {"path":"text","equals":"yes","if_positions":[2],"else_positions":[]}
 -- 3. http_request config: {"url":"https://httpbin.org/post","method":"POST"}
 -- 4. approval_gate config: {}

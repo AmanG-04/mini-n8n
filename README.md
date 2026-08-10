@@ -5,7 +5,7 @@ FlowForge is an organization-isolated workflow builder using Nhost Auth, Postgre
 ## Local setup
 
 1. Nhost Git deployments automatically apply the committed `nhost/migrations` and `nhost/metadata` files. `nhost/config.yaml` is the Hasura CLI configuration Nhost uses for that step; the repository intentionally does not override Nhost's managed platform Auth/JWT configuration. Do not use a database URL in the browser.
-2. Nhost automatically provides `NHOST_GRAPHQL_URL` and `NHOST_ADMIN_SECRET` to Functions. Add `GROQ_API_KEY` as a Function secret, and set `WORKFLOW_ACTIONS_URL` and `NOTIFICATION_DISPATCH_URL` to the deployed/local function URLs. No direct `DATABASE_URL` is needed, so this works on the Nhost Free plan. Without a Groq key, `llm_call` intentionally waits 700 ms and returns a clearly labelled stub response.
+2. Nhost automatically provides `NHOST_GRAPHQL_URL` and `NHOST_ADMIN_SECRET` to Functions. Add `GROQ_API_KEY` as a Function secret, and set `WORKFLOW_ACTIONS_URL` and `NOTIFICATION_DISPATCH_URL` to the deployed/local function URLs. No direct `DATABASE_URL` is needed, so this works on the Nhost Free plan. `llm_call` always makes a real Groq request using `llama-3.3-70b-versatile`; a missing key fails the step explicitly.
 3. `cd functions && npm install && npm run typecheck && npm test`
 4. `cd web && npm install && npm run dev`. For a production check run `npm run build`.
 5. Create two auth users, then use [`scripts/bootstrap-demo.sql`](scripts/bootstrap-demo.sql) as an admin-only seed template to create Org A / Org B membership. Never grant the service role to an application client.
@@ -18,7 +18,7 @@ FlowForge is an organization-isolated workflow builder using Nhost Auth, Postgre
 
 ## Final demo procedure
 
-1. Sign in as Org A owner and select Org A. Create a workflow. Add `llm_call`, `conditional_branch`, `http_request`, and `approval_gate` in that order. A branch config can inspect `approved` from the no-key stub (`{ "path": "approved", "equals": true, "if_positions": [3], "else_positions": [2] }`); positions listed in the non-selected branch are marked `skipped`.
+1. Sign in as Org A owner and select Org A. Create a workflow. Add `llm_call`, `conditional_branch`, `http_request`, and `approval_gate` in that order. Configure Groq to reply exactly `yes`, then use `{ "path": "text", "equals": "yes", "if_positions": [2], "else_positions": [] }`; positions listed in the non-selected branch are marked `skipped`.
 2. Run it. The UI’s GraphQL WebSocket subscription updates each `step_runs` row without refresh. It pauses at the gate.
 3. Approve as the Org A owner/editor. The same run resumes and completes. Observe usage increment after completion.
 4. Add an owner-only webhook trigger in the UI. Copy the one-time secret and trigger ID from the dialog, then POST `{ "trigger_id": "...", "secret": "...", "payload": {} }` to `workflow-webhook`; it creates another run without a UI button.

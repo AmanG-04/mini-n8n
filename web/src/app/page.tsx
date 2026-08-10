@@ -7,9 +7,9 @@ type Workflow = { id: string; name: string; description: string; steps: Step[]; 
 type Step = { id: string; position: number; type: string; name: string; config: Record<string, unknown> };
 const mutation = (name: string, body: string) => `mutation ${name} ${body}`;
 const configExamples: Record<string, string> = {
-  llm_call: JSON.stringify({ prompt: "Classify this input: {{input}}", model: "llama-3.3-70b-versatile", temperature: 0.2 }),
+  llm_call: JSON.stringify({ prompt: "Reply with exactly the lowercase word yes and nothing else. Input: {{input}}", temperature: 0.2 }),
   http_request: JSON.stringify({ url: "https://httpbin.org/post", method: "POST", body: { input: "{{input}}" }, timeout_ms: 10000 }),
-  conditional_branch: JSON.stringify({ path: "approved", equals: true, if_positions: [3], else_positions: [2] }),
+  conditional_branch: JSON.stringify({ path: "text", equals: "yes", if_positions: [2], else_positions: [] }),
   approval_gate: "{}",
   db_write: JSON.stringify({ label: "save workflow output" }),
   notify: JSON.stringify({ channel: "webhook", message: "Workflow completed" })
