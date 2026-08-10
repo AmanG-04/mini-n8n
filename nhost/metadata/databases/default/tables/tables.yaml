@@ -1,13 +1,13 @@
 - table: { schema: public, name: organizations }
   array_relationships:
     - name: members
-      using: { foreign_key_constraint_on: { table: public.org_members, column: org_id } }
+      using: { foreign_key_constraint_on: { table: { schema: public, name: org_members }, column: org_id } }
     - name: workflows
-      using: { foreign_key_constraint_on: { table: public.workflows, column: org_id } }
+      using: { foreign_key_constraint_on: { table: { schema: public, name: workflows }, column: org_id } }
     - name: runs
-      using: { foreign_key_constraint_on: { table: public.workflow_runs, column: org_id } }
+      using: { foreign_key_constraint_on: { table: { schema: public, name: workflow_runs }, column: org_id } }
     - name: usage_events
-      using: { foreign_key_constraint_on: { table: public.usage_events, column: org_id } }
+      using: { foreign_key_constraint_on: { table: { schema: public, name: usage_events }, column: org_id } }
   select_permissions:
     - role: user
       permission:
@@ -52,11 +52,11 @@
       using: { foreign_key_constraint_on: org_id }
   array_relationships:
     - name: steps
-      using: { foreign_key_constraint_on: { table: public.workflow_steps, column: workflow_id } }
+      using: { foreign_key_constraint_on: { table: { schema: public, name: workflow_steps }, column: workflow_id } }
     - name: triggers
-      using: { foreign_key_constraint_on: { table: public.workflow_triggers, column: workflow_id } }
+      using: { foreign_key_constraint_on: { table: { schema: public, name: workflow_triggers }, column: workflow_id } }
     - name: runs
-      using: { foreign_key_constraint_on: { table: public.workflow_runs, column: workflow_id } }
+      using: { foreign_key_constraint_on: { table: { schema: public, name: workflow_runs }, column: workflow_id } }
   select_permissions:
     - role: user
       permission:
@@ -151,9 +151,9 @@
       using: { foreign_key_constraint_on: org_id }
   array_relationships:
     - name: step_runs
-      using: { foreign_key_constraint_on: { table: public.step_runs, column: workflow_run_id } }
+      using: { foreign_key_constraint_on: { table: { schema: public, name: step_runs }, column: workflow_run_id } }
     - name: usage_event
-      using: { foreign_key_constraint_on: { table: public.usage_events, column: workflow_run_id } }
+      using: { foreign_key_constraint_on: { table: { schema: public, name: usage_events }, column: workflow_run_id } }
   select_permissions:
     - role: user
       permission:
