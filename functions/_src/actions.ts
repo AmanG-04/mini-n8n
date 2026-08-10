@@ -11,8 +11,8 @@ export type WebhookTriggerResult = { trigger_id: string; secret: string };
 
 export async function createWebhookTrigger(workflowId: string, userId: string): Promise<WebhookTriggerResult> {
   try {
-    const access = await hasura<{ workflows_by_pk: { id: string; organization: { members: { role: string }[] } } | null }>(
-      `query WorkflowOwner($workflow: uuid!, $user: uuid!) { workflows_by_pk(id: $workflow) { id organization { members(where: { user_id: { _eq: $user } }) { role } } } }`,
+    const access = await hasura<{ workflows_by_pk: { id: string; organization: { members: { role: string }[] }; triggers: { id: string }[] } | null }>(
+      `query WorkflowOwner($workflow: uuid!, $user: uuid!) { workflows_by_pk(id: $workflow) { id organization { members(where: { user_id: { _eq: $user } }) { role } } triggers(where: { type: { _eq: webhook } }, limit: 1) { id } } }`,
       { workflow: workflowId, user: userId }
     );
     if (!access.workflows_by_pk || access.workflows_by_pk.organization.members.every((member) => member.role !== "owner")) {
@@ -20,6 +20,11 @@ export async function createWebhookTrigger(workflowId: string, userId: string): 
     }
     const secret = randomBytes(32).toString("base64url");
     const secretHash = createHash("sha256").update(secret).digest("hex");
+    const existingTriggerId = access.workflows_by_pk.triggers[0]?.id;
+    if (existingTriggerId) {
+      await hasura(`mutation RotateWebhook($id: uuid!, $hash: String!) { update_workflow_triggers_by_pk(pk_columns: { id: $id }, _set: { secret_hash: $hash, is_enabled: true }) { id } }`, { id: existingTriggerId, hash: secretHash });
+      return { trigger_id: existingTriggerId, secret };
+    }
     const result = await hasura<{ insert_workflow_triggers_one: { id: string } }>(
       `mutation CreateWebhook($workflow: uuid!, $hash: String!) { insert_workflow_triggers_one(object: { workflow_id: $workflow, type: webhook, is_enabled: true, config: {}, secret_hash: $hash }) { id } }`,
       { workflow: workflowId, hash: secretHash }
