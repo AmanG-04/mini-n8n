@@ -41,7 +41,7 @@ export async function createRun(workflowId: string, userId: string, triggerType:
     );
     const run = data.start_workflow_run[0];
     if (!run) throw new ActionError("Unable to start workflow", 403);
-    queueExecution(run.run_id);
+    await executeRun(run.run_id);
     return run;
   } catch (error) { throw asActionError(error); }
 }
@@ -53,7 +53,7 @@ export async function approveRunStep(stepRunId: string, userId: string): Promise
     );
     const run = data.approve_workflow_step[0];
     if (!run) throw new ActionError("Approval step not found or you do not have permission", 403);
-    queueExecution(run.run_id);
+    await executeRun(run.run_id);
     return run;
   } catch (error) { throw asActionError(error); }
 }
@@ -65,19 +65,20 @@ export async function createWebhookRun(triggerId: string, secret: string, input:
     );
     const run = data.start_webhook_workflow_run[0];
     if (!run) throw new ActionError("Invalid webhook credentials", 401);
-    queueExecution(run.run_id);
+    await executeRun(run.run_id);
     return run;
   } catch (error) { throw asActionError(error); }
 }
 
-function queueExecution(runId: string): void {
-  setTimeout(() => {
-    void new WorkflowExecutor().execute(runId).then(async (result) => {
-      if (result.status === "completed") {
-        await hasura(`mutation Usage($run: uuid!) { record_workflow_usage(args: { p_run_id: $run }) { usage_id: id } }`, { run: runId });
-      }
-    }).catch((error: unknown) => console.error("Workflow execution failed", { runId, error }));
-  }, 0);
+async function executeRun(runId: string): Promise<void> {
+  try {
+    const result = await new WorkflowExecutor().execute(runId);
+    if (result.status === "completed") {
+      await hasura(`mutation Usage($run: uuid!) { record_workflow_usage(args: { p_run_id: $run }) { usage_id: id } }`, { run: runId });
+    }
+  } catch (error) {
+    console.error("Workflow execution failed", { runId, error });
+  }
 }
 
 function asActionError(error: unknown): ActionError {
