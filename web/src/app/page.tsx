@@ -24,7 +24,7 @@ export default function Home() {
   async function addStep(type: string) {
     if (!selected) return;
     try {
-      await graphQL(mutation("AddStep", `($workflow:uuid!,$position:Int!,$type:workflow_step_type_enum!){insert_workflow_steps_one(object:{workflow_id:$workflow,position:$position,type:$type,name:$type,config:{}}){id}}`), { workflow: selected.id, position: selected.steps.length, type }, token);
+      await graphQL(mutation("AddStep", `($workflow:uuid!,$position:Int!,$type:workflow_step_type_enum!,$name:String!){insert_workflow_steps_one(object:{workflow_id:$workflow,position:$position,type:$type,name:$name,config:{}}){id}}`), { workflow: selected.id, position: selected.steps.length, type, name: type }, token);
       await loadWorkflows();
       setMessage(`${type} step added.`);
     } catch (error) {
