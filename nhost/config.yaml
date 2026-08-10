@@ -1,0 +1,8 @@
+# Hasura CLI project configuration used by Nhost's migration/metadata runner.
+# Nhost supplies the hosted endpoint and credentials during deployment.
+version: 3
+endpoint: http://localhost:8080
+admin_secret: adminsecretkey
+metadata_directory: metadata
+migrations_directory: migrations
+seeds_directory: seeds
