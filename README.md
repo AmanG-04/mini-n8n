@@ -4,7 +4,7 @@ FlowForge is an organization-isolated workflow builder using Nhost Auth, Postgre
 
 ## Local setup
 
-1. Nhost Git deployments automatically apply the committed `nhost/migrations` and `nhost/metadata` files. The valid Nhost configuration is `nhost/nhost.toml`. Do not use a database URL in the browser.
+1. Nhost Git deployments automatically apply the committed `nhost/migrations` and `nhost/metadata` files. This repository intentionally does not override Nhost's managed platform configuration, so its Auth/JWT settings remain in Nhost Cloud. Do not use a database URL in the browser.
 2. Nhost automatically provides `NHOST_GRAPHQL_URL` and `NHOST_ADMIN_SECRET` to Functions. Add `GROQ_API_KEY` as a Function secret, and set `WORKFLOW_ACTIONS_URL` and `NOTIFICATION_DISPATCH_URL` to the deployed/local function URLs. No direct `DATABASE_URL` is needed, so this works on the Nhost Free plan. Without a Groq key, `llm_call` intentionally waits 700 ms and returns a clearly labelled stub response.
 3. `cd functions && npm install && npm run typecheck && npm test`
 4. `cd web && npm install && npm run dev`. For a production check run `npm run build`.
