@@ -1,8 +1,0 @@
-# Hasura CLI project file used by Nhost's migrations-and-metadata deployment step.
-# Nhost supplies the real endpoint/admin credentials during deployment.
-version: 3
-endpoint: http://localhost:8080
-admin_secret: adminsecretkey
-metadata_directory: metadata
-migrations_directory: migrations
-seeds_directory: seeds

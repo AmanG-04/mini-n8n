@@ -1,0 +1,3 @@
+# Nhost cloud configuration. Migrations and Hasura metadata live beside this file.
+[functions.node]
+version = 22
