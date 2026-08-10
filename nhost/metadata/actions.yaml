@@ -2,37 +2,22 @@ actions:
   - name: triggerWorkflowRun
     definition:
       kind: synchronous
-      type: mutation
       handler: "{{WORKFLOW_ACTIONS_URL}}"
       forward_client_headers: true
-      arguments:
-        - name: workflow_id
-          type: uuid!
-      output_type: TriggerWorkflowRunOutput!
     permissions:
       - role: user
   - name: approveStep
     definition:
       kind: synchronous
-      type: mutation
       handler: "{{WORKFLOW_ACTIONS_URL}}"
       forward_client_headers: true
-      arguments:
-        - name: step_run_id
-          type: uuid!
-      output_type: ApproveStepOutput!
     permissions:
       - role: user
   - name: createWebhookTrigger
     definition:
       kind: synchronous
-      type: mutation
       handler: "{{WORKFLOW_ACTIONS_URL}}"
       forward_client_headers: true
-      arguments:
-        - name: workflow_id
-          type: uuid!
-      output_type: CreateWebhookTriggerOutput!
     permissions:
       - role: user
 custom_types:
@@ -41,23 +26,5 @@ custom_types:
   scalars: []
   objects:
     - name: TriggerWorkflowRunOutput
-      relationships: []
-      fields:
-        - name: run_id
-          type: uuid!
-        - name: status
-          type: String!
     - name: ApproveStepOutput
-      relationships: []
-      fields:
-        - name: run_id
-          type: uuid!
-        - name: status
-          type: String!
     - name: CreateWebhookTriggerOutput
-      relationships: []
-      fields:
-        - name: trigger_id
-          type: uuid!
-        - name: secret
-          type: String!
