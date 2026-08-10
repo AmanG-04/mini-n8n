@@ -24,7 +24,7 @@ export default function Home() {
   async function addStep(type: string) {
     if (!selected) return;
     try {
-      await graphQL(mutation("AddStep", `($workflow:uuid!,$position:Int!,$type:workflow_step_type_enum!,$name:String!){insert_workflow_steps_one(object:{workflow_id:$workflow,position:$position,type:$type,name:$name,config:{}}){id}}`), { workflow: selected.id, position: selected.steps.length, type, name: type }, token);
+      await graphQL(mutation("AddStep", `($workflow:uuid!,$position:Int!,$type:workflow_step_type!,$name:String!){insert_workflow_steps_one(object:{workflow_id:$workflow,position:$position,type:$type,name:$name,config:{}}){id}}`), { workflow: selected.id, position: selected.steps.length, type, name: type }, token);
       await loadWorkflows();
       setMessage(`${type} step added.`);
     } catch (error) {
@@ -38,7 +38,7 @@ export default function Home() {
     if (selected.triggers.some((trigger) => trigger.type === type)) { setMessage(`${type} trigger already exists.`); return; }
     if (type === "webhook" && role !== "owner") { setMessage("Only owners can add webhook triggers."); return; }
     try {
-      await graphQL(mutation("AddTrigger", `($workflow:uuid!,$type:workflow_trigger_type_enum!){insert_workflow_triggers_one(object:{workflow_id:$workflow,type:$type,is_enabled:true,config:{}}){id}}`), { workflow: selected.id, type }, token);
+      await graphQL(mutation("AddTrigger", `($workflow:uuid!,$type:workflow_trigger_type!){insert_workflow_triggers_one(object:{workflow_id:$workflow,type:$type,is_enabled:true,config:{}}){id}}`), { workflow: selected.id, type }, token);
       await loadWorkflows();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to add trigger.");
