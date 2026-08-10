@@ -1,5 +1,5 @@
 import { fetchWithRetry } from "../src/handlers/utils.js";
-import { database } from "../src/db.js";
+import { hasura } from "../src/hasura.js";
 
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
@@ -11,11 +11,11 @@ export default async function handler(request: { body: { event: { data: { new: {
     if (!endpoint) throw new Error("NOTIFICATION_WEBHOOK_URL is not configured");
     const result = await fetchWithRetry(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(row.payload) });
     if (!result.ok) throw new Error(`Notification endpoint returned ${result.status}`);
-    await database().query("UPDATE public.notification_outbox SET delivered_at = now(), delivery_error = NULL WHERE id = $1", [row.id]);
+    await hasura(`mutation Delivered($id: uuid!, $time: timestamptz!) { update_notification_outbox_by_pk(pk_columns: { id: $id }, _set: { delivered_at: $time, delivery_error: null }) { id } }`, { id: row.id, time: new Date().toISOString() });
     response.json({ delivered: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Notification delivery failed";
-    await database().query("UPDATE public.notification_outbox SET delivery_error = $2 WHERE id = $1", [row.id, message]);
+    await hasura(`mutation Failed($id: uuid!, $error: String!) { update_notification_outbox_by_pk(pk_columns: { id: $id }, _set: { delivery_error: $error }) { id } }`, { id: row.id, error: message });
     response.status(500).json({ message });
   }
 }

@@ -1,80 +1,68 @@
-import type { Pool, PoolClient } from "pg";
+import { hasura } from "./hasura.js";
 import { executeStep } from "./handlers/index.js";
 import type { Json, StepRun, WorkflowRun, WorkflowStep } from "./types.js";
 
 type JoinedStep = WorkflowStep & { step_run_id: string; step_run_status: StepRun["status"]; step_run_output: Json | null; approved_by: string | null };
 
-function toRun(row: Record<string, unknown>): WorkflowRun {
-  return row as unknown as WorkflowRun;
-}
-
 export class WorkflowExecutor {
-  constructor(private readonly pool: Pool) {}
-
   async execute(runId: string): Promise<{ status: WorkflowRun["status"] }> {
-    const client = await this.pool.connect();
-    try {
-      const runResult = await client.query<WorkflowRun>(
-        `UPDATE public.workflow_runs SET status = 'running', started_at = COALESCE(started_at, now()), error = NULL
-         WHERE id = $1 AND status IN ('queued', 'paused', 'running') RETURNING *`, [runId]
-      );
-      const run = runResult.rows[0];
-      if (!run) throw new Error("Run is not executable");
-      const steps = await this.loadSteps(client, runId);
-      let previousOutput: Json | null = null;
-      for (const item of steps) {
-        if (item.step_run_status === "completed" || item.step_run_status === "skipped") {
-          previousOutput = item.step_run_output;
-          continue;
+    const loaded = await hasura<{ workflow_runs_by_pk: WorkflowRun | null }>(
+      `query Run($id: uuid!) { workflow_runs_by_pk(id: $id) { id org_id workflow_id input status } }`, { id: runId }
+    );
+    const run = loaded.workflow_runs_by_pk;
+    if (!run || !["queued", "paused", "running"].includes(run.status)) throw new Error("Run is not executable");
+    await this.updateRun(runId, { status: "running", started_at: new Date().toISOString(), error: null });
+    const steps = await this.loadSteps(runId);
+    let previousOutput: Json | null = null;
+    for (const item of steps) {
+      if (item.step_run_status === "completed" || item.step_run_status === "skipped") { previousOutput = item.step_run_output; continue; }
+      if (item.type === "approval_gate") {
+        if (!item.approved_by) {
+          await this.updateStep(item.step_run_id, { status: "paused", started_at: new Date().toISOString() });
+          await this.updateRun(runId, { status: "paused" });
+          return { status: "paused" };
         }
-        if (item.type === "approval_gate") {
-          if (!item.approved_by) {
-            await client.query(`UPDATE public.step_runs SET status = 'paused', started_at = COALESCE(started_at, now()) WHERE id = $1`, [item.step_run_id]);
-            await client.query(`UPDATE public.workflow_runs SET status = 'paused' WHERE id = $1`, [runId]);
-            return { status: "paused" };
-          }
-          await client.query(`UPDATE public.step_runs SET status = 'completed', completed_at = now(), output = $2::jsonb WHERE id = $1`, [item.step_run_id, JSON.stringify({ approved_by: item.approved_by })]);
-          previousOutput = { approved_by: item.approved_by };
-          continue;
-        }
-
-        const stepRun = await this.markRunning(client, item.step_run_id, run.input, previousOutput);
-        try {
-          const result = await executeStep(client, { run, step: item, stepRun, input: run.input, previousOutput });
-          await client.query(
-            `UPDATE public.step_runs SET status = 'completed', output = $2::jsonb, completed_at = now(), error = NULL WHERE id = $1`,
-            [item.step_run_id, JSON.stringify(result.output)]
-          );
-          previousOutput = result.output;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Unknown step error";
-          await client.query(`UPDATE public.step_runs SET status = 'failed', error = $2, completed_at = now() WHERE id = $1`, [item.step_run_id, message]);
-          await client.query(`UPDATE public.workflow_runs SET status = 'failed', error = $2, completed_at = now() WHERE id = $1`, [runId, message]);
-          return { status: "failed" };
-        }
+        const output = { approved_by: item.approved_by };
+        await this.updateStep(item.step_run_id, { status: "completed", completed_at: new Date().toISOString(), output });
+        previousOutput = output;
+        continue;
       }
-      await client.query(`UPDATE public.workflow_runs SET status = 'completed', output = $2::jsonb, completed_at = now() WHERE id = $1`, [runId, JSON.stringify(previousOutput)]);
-      return { status: "completed" };
-    } finally {
-      client.release();
+      const stepRun = await this.markRunning(item.step_run_id, run.input, previousOutput);
+      try {
+        const result = await executeStep({ run, step: item, stepRun, input: run.input, previousOutput });
+        await this.updateStep(item.step_run_id, { status: "completed", output: result.output, completed_at: new Date().toISOString(), error: null });
+        previousOutput = result.output;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown step error";
+        await this.updateStep(item.step_run_id, { status: "failed", error: message, completed_at: new Date().toISOString() });
+        await this.updateRun(runId, { status: "failed", error: message, completed_at: new Date().toISOString() });
+        return { status: "failed" };
+      }
     }
+    await this.updateRun(runId, { status: "completed", output: previousOutput, completed_at: new Date().toISOString() });
+    return { status: "completed" };
   }
 
-  private async loadSteps(client: PoolClient, runId: string): Promise<JoinedStep[]> {
-    const result = await client.query<JoinedStep>(
-      `SELECT ws.*, sr.id AS step_run_id, sr.status AS step_run_status, sr.output AS step_run_output, sr.approved_by
-       FROM public.step_runs sr JOIN public.workflow_steps ws ON ws.id = sr.workflow_step_id
-       WHERE sr.workflow_run_id = $1 ORDER BY sr.position ASC`, [runId]
+  private async loadSteps(runId: string): Promise<JoinedStep[]> {
+    const data = await hasura<{ step_runs: { id: string; status: StepRun["status"]; output: Json | null; approved_by: string | null; workflow_step: WorkflowStep }[] }>(
+      `query Steps($id: uuid!) { step_runs(where: { workflow_run_id: { _eq: $id } }, order_by: { position: asc }) { id status output approved_by workflow_step { id workflow_id position type name config } } }`, { id: runId }
     );
-    return result.rows;
+    return data.step_runs.map((row) => ({ ...row.workflow_step, step_run_id: row.id, step_run_status: row.status, step_run_output: row.output, approved_by: row.approved_by }));
   }
 
-  private async markRunning(client: PoolClient, id: string, input: Record<string, Json>, previousOutput: Json | null): Promise<StepRun> {
-    const result = await client.query<StepRun>(
-      `UPDATE public.step_runs SET status = 'running', started_at = COALESCE(started_at, now()), attempt_count = attempt_count + 1,
-       input = $2::jsonb WHERE id = $1 RETURNING *`,
-      [id, JSON.stringify({ workflow_input: input, previous_output: previousOutput })]
+  private async markRunning(id: string, input: Record<string, Json>, previousOutput: Json | null): Promise<StepRun> {
+    const data = await hasura<{ update_step_runs_by_pk: StepRun }>(
+      `mutation Start($id: uuid!, $input: jsonb!, $started: timestamptz!) { update_step_runs_by_pk(pk_columns: { id: $id }, _set: { status: running, started_at: $started, input: $input }, _inc: { attempt_count: 1 }) { id workflow_run_id workflow_step_id position type status output approved_by } }`,
+      { id, input: { workflow_input: input, previous_output: previousOutput }, started: new Date().toISOString() }
     );
-    return result.rows[0];
+    return data.update_step_runs_by_pk;
+  }
+
+  private async updateStep(id: string, changes: Record<string, unknown>): Promise<void> {
+    await hasura(`mutation Step($id: uuid!, $set: step_runs_set_input!) { update_step_runs_by_pk(pk_columns: { id: $id }, _set: $set) { id } }`, { id, set: changes });
+  }
+
+  private async updateRun(id: string, changes: Record<string, unknown>): Promise<void> {
+    await hasura(`mutation Run($id: uuid!, $set: workflow_runs_set_input!) { update_workflow_runs_by_pk(pk_columns: { id: $id }, _set: $set) { id } }`, { id, set: changes });
   }
 }

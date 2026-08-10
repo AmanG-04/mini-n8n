@@ -1,5 +1,4 @@
 import { ActionError, createWebhookRun } from "../src/actions.js";
-import { database } from "../src/db.js";
 
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 
@@ -8,7 +7,7 @@ export default async function handler(request: { body: { trigger_id?: string; se
   try {
     const { trigger_id, secret, payload = {} } = request.body;
     if (!trigger_id || !secret) throw new ActionError("trigger_id and secret are required", 400);
-    response.json(await createWebhookRun(database(), trigger_id, secret, payload));
+    response.json(await createWebhookRun(trigger_id, secret, payload));
   } catch (error) {
     const known = error instanceof ActionError;
     response.status(known ? error.status : 500).json({ message: known ? error.message : "Webhook failed" });

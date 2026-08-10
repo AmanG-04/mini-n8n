@@ -5,7 +5,7 @@ FlowForge is an organization-isolated workflow builder using Nhost Auth, Postgre
 ## Local setup
 
 1. Install and start the Nhost local stack, then apply the committed `nhost/migrations` and `nhost/metadata` using your normal Nhost/Hasura migration workflow. Do not use a database URL in the browser.
-2. Copy `.env.example` values into Nhost function secrets. Set `WORKFLOW_ACTIONS_URL` and `NOTIFICATION_DISPATCH_URL` to the deployed/local function URLs. Add `GROQ_API_KEY` for real LLM calls. Without it, `llm_call` intentionally waits 700 ms and returns a clearly labelled stub response.
+2. Nhost automatically provides `NHOST_GRAPHQL_URL` and `NHOST_ADMIN_SECRET` to Functions. Add `GROQ_API_KEY` as a Function secret, and set `WORKFLOW_ACTIONS_URL` and `NOTIFICATION_DISPATCH_URL` to the deployed/local function URLs. No direct `DATABASE_URL` is needed, so this works on the Nhost Free plan. Without a Groq key, `llm_call` intentionally waits 700 ms and returns a clearly labelled stub response.
 3. `cd functions && npm install && npm run typecheck && npm test`
 4. `cd web && npm install && npm run dev`. For a production check run `npm run build`.
 5. Create two auth users, then use [`scripts/bootstrap-demo.sql`](scripts/bootstrap-demo.sql) as an admin-only seed template to create Org A / Org B membership. Never grant the service role to an application client.

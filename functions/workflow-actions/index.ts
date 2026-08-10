@@ -1,5 +1,4 @@
 import { approveRunStep, ActionError, createRun } from "../src/actions.js";
-import { database } from "../src/db.js";
 
 type HasuraRequest = {
   action: { name: "triggerWorkflowRun" | "approveStep" };
@@ -12,15 +11,14 @@ export default async function handler(request: { body: HasuraRequest }, response
   try {
     const userId = request.body.session_variables?.["x-hasura-user-id"];
     if (!userId) throw new ActionError("Authentication is required", 401);
-    const pool = database();
     if (request.body.action.name === "triggerWorkflowRun") {
       if (!request.body.input.workflow_id) throw new ActionError("workflow_id is required");
-      response.json(await createRun(pool, request.body.input.workflow_id, userId, "manual"));
+      response.json(await createRun(request.body.input.workflow_id, userId, "manual"));
       return;
     }
     if (request.body.action.name === "approveStep") {
       if (!request.body.input.step_run_id) throw new ActionError("step_run_id is required");
-      response.json(await approveRunStep(pool, request.body.input.step_run_id, userId));
+      response.json(await approveRunStep(request.body.input.step_run_id, userId));
       return;
     }
     throw new ActionError("Unsupported action", 400);
