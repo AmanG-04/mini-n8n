@@ -2,7 +2,7 @@ actions:
   - name: triggerWorkflowRun
     definition:
       kind: synchronous
-      handler: { from_env: WORKFLOW_ACTIONS_URL }
+      handler: "{{WORKFLOW_ACTIONS_URL}}"
       forward_client_headers: true
       arguments:
         - name: workflow_id
@@ -13,7 +13,7 @@ actions:
   - name: approveStep
     definition:
       kind: synchronous
-      handler: { from_env: WORKFLOW_ACTIONS_URL }
+      handler: "{{WORKFLOW_ACTIONS_URL}}"
       forward_client_headers: true
       arguments:
         - name: step_run_id
@@ -24,7 +24,7 @@ actions:
   - name: createWebhookTrigger
     definition:
       kind: synchronous
-      handler: { from_env: WORKFLOW_ACTIONS_URL }
+      handler: "{{WORKFLOW_ACTIONS_URL}}"
       forward_client_headers: true
       arguments:
         - name: workflow_id
