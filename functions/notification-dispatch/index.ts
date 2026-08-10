@@ -1,5 +1,5 @@
-import { fetchWithRetry } from "../src/handlers/utils.js";
-import { hasura } from "../src/hasura.js";
+import { fetchWithRetry } from "../_src/handlers/utils.js";
+import { hasura } from "../_src/hasura.js";
 
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 

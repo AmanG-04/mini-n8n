@@ -1,4 +1,4 @@
-import { ActionError, createWebhookRun } from "../src/actions.js";
+import { ActionError, createWebhookRun } from "../_src/actions.js";
 
 type Response = { status: (code: number) => Response; json: (body: unknown) => void };
 

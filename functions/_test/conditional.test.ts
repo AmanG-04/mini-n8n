@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runConditionalBranch } from "../src/handlers/conditional.js";
+import { runConditionalBranch } from "../_src/handlers/conditional.js";
 
 describe("conditional_branch", () => {
   it("uses the previous LLM output rather than a hard-coded branch", async () => {

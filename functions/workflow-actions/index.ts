@@ -1,4 +1,4 @@
-import { approveRunStep, ActionError, createRun } from "../src/actions.js";
+import { approveRunStep, ActionError, createRun } from "../_src/actions.js";
 
 type HasuraRequest = {
   action: { name: "triggerWorkflowRun" | "approveStep" };
