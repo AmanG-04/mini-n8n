@@ -9,7 +9,7 @@ const mutation = (name: string, body: string) => `mutation ${name} ${body}`;
 const configExamples: Record<string, string> = {
   llm_call: JSON.stringify({ prompt: "Classify this input: {{input}}", model: "llama-3.3-70b-versatile", temperature: 0.2 }),
   http_request: JSON.stringify({ url: "https://httpbin.org/post", method: "POST", body: { input: "{{input}}" }, timeout_ms: 10000 }),
-  conditional_branch: JSON.stringify({ path: "text", equals: "yes" }),
+  conditional_branch: JSON.stringify({ path: "approved", equals: true, if_positions: [3], else_positions: [2] }),
   approval_gate: "{}",
   db_write: JSON.stringify({ label: "save workflow output" }),
   notify: JSON.stringify({ channel: "webhook", message: "Workflow completed" })
@@ -47,6 +47,12 @@ export default function Home() {
     if (selected.triggers.some((trigger) => trigger.type === type)) { setMessage(`${type} trigger already exists.`); return; }
     if (type === "webhook" && role !== "owner") { setMessage("Only owners can add webhook triggers."); return; }
     try {
+      if (type === "webhook") {
+        const result = await graphQL<{ createWebhookTrigger: { trigger_id: string; secret: string } }>(mutation("CreateWebhook", `($workflow:uuid!){createWebhookTrigger(workflow_id:$workflow){trigger_id secret}}`), { workflow: selected.id }, token);
+        window.alert(`Copy this webhook secret now. It will not be shown again:\n\n${result.createWebhookTrigger.secret}\n\nTrigger ID: ${result.createWebhookTrigger.trigger_id}`);
+        await loadWorkflows();
+        return;
+      }
       await graphQL(mutation("AddTrigger", `($workflow:uuid!,$type:workflow_trigger_type!){insert_workflow_triggers_one(object:{workflow_id:$workflow,type:$type,is_enabled:true,config:{}}){id}}`), { workflow: selected.id, type }, token);
       await loadWorkflows();
     } catch (error) {

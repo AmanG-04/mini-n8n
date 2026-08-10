@@ -4,6 +4,10 @@ import type { Json, StepRun, WorkflowRun, WorkflowStep } from "./types.js";
 
 type JoinedStep = WorkflowStep & { step_run_id: string; step_run_status: StepRun["status"]; step_run_output: Json | null; approved_by: string | null };
 
+function positionList(value: Json | undefined): number[] {
+  return Array.isArray(value) ? value.filter((item): item is number => typeof item === "number" && Number.isInteger(item) && item >= 0) : [];
+}
+
 export class WorkflowExecutor {
   async execute(runId: string): Promise<{ status: WorkflowRun["status"] }> {
     const loaded = await hasura<{ workflow_runs_by_pk: WorkflowRun | null }>(
@@ -14,8 +18,14 @@ export class WorkflowExecutor {
     await this.updateRun(runId, { status: "running", started_at: new Date().toISOString(), error: null });
     const steps = await this.loadSteps(runId);
     let previousOutput: Json | null = null;
+    const skippedPositions = new Set<number>();
     for (const item of steps) {
-      if (item.step_run_status === "completed" || item.step_run_status === "skipped") { previousOutput = item.step_run_output; continue; }
+      if (item.step_run_status === "completed") { previousOutput = item.step_run_output; continue; }
+      if (item.step_run_status === "skipped") continue;
+      if (skippedPositions.has(item.position)) {
+        await this.updateStep(item.step_run_id, { status: "skipped", output: { reason: "conditional_branch" }, completed_at: new Date().toISOString() });
+        continue;
+      }
       if (item.type === "approval_gate") {
         if (!item.approved_by) {
           await this.updateStep(item.step_run_id, { status: "paused", started_at: new Date().toISOString() });
@@ -32,6 +42,11 @@ export class WorkflowExecutor {
         const result = await executeStep({ run, step: item, stepRun, input: run.input, previousOutput });
         await this.updateStep(item.step_run_id, { status: "completed", output: result.output, completed_at: new Date().toISOString(), error: null });
         previousOutput = result.output;
+        if (item.type === "conditional_branch" && result.output && typeof result.output === "object" && !Array.isArray(result.output)) {
+          const matched = result.output.matched === true;
+          const skip = matched ? positionList(item.config.else_positions) : positionList(item.config.if_positions);
+          for (const position of skip) if (position > item.position) skippedPositions.add(position);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown step error";
         await this.updateStep(item.step_run_id, { status: "failed", error: message, completed_at: new Date().toISOString() });

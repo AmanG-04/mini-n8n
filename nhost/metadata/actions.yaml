@@ -21,6 +21,17 @@ actions:
       output_type: ApproveStepOutput!
     permissions:
       - role: user
+  - name: createWebhookTrigger
+    definition:
+      kind: synchronous
+      handler: { from_env: WORKFLOW_ACTIONS_URL }
+      forward_client_headers: true
+      arguments:
+        - name: workflow_id
+          type: uuid!
+      output_type: CreateWebhookTriggerOutput!
+    permissions:
+      - role: user
 custom_types:
   input_objects: []
   enums: []
@@ -39,4 +50,11 @@ custom_types:
         - name: run_id
           type: uuid!
         - name: status
+          type: String!
+    - name: CreateWebhookTriggerOutput
+      relationships: []
+      fields:
+        - name: trigger_id
+          type: uuid!
+        - name: secret
           type: String!

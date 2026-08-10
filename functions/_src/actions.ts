@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { hasura } from "./hasura.js";
 import { WorkflowExecutor } from "./executor.js";
 
@@ -6,6 +7,26 @@ export class ActionError extends Error {
 }
 
 type StartResult = { run_id: string; status: string };
+export type WebhookTriggerResult = { trigger_id: string; secret: string };
+
+export async function createWebhookTrigger(workflowId: string, userId: string): Promise<WebhookTriggerResult> {
+  try {
+    const access = await hasura<{ workflows_by_pk: { id: string; organization: { members: { role: string }[] } } | null }>(
+      `query WorkflowOwner($workflow: uuid!, $user: uuid!) { workflows_by_pk(id: $workflow) { id organization { members(where: { user_id: { _eq: $user } }) { role } } } }`,
+      { workflow: workflowId, user: userId }
+    );
+    if (!access.workflows_by_pk || access.workflows_by_pk.organization.members.every((member) => member.role !== "owner")) {
+      throw new ActionError("Only an organization owner can create a webhook trigger", 403);
+    }
+    const secret = randomBytes(32).toString("base64url");
+    const secretHash = createHash("sha256").update(secret).digest("hex");
+    const result = await hasura<{ insert_workflow_triggers_one: { id: string } }>(
+      `mutation CreateWebhook($workflow: uuid!, $hash: String!) { insert_workflow_triggers_one(object: { workflow_id: $workflow, type: webhook, is_enabled: true, config: {}, secret_hash: $hash }) { id } }`,
+      { workflow: workflowId, hash: secretHash }
+    );
+    return { trigger_id: result.insert_workflow_triggers_one.id, secret };
+  } catch (error) { throw asActionError(error); }
+}
 
 export async function createRun(workflowId: string, userId: string, triggerType: "manual" | "webhook", input: object = {}): Promise<StartResult> {
   try {

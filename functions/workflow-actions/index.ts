@@ -1,7 +1,7 @@
-import { approveRunStep, ActionError, createRun } from "../_src/actions.js";
+import { approveRunStep, ActionError, createRun, createWebhookTrigger } from "../_src/actions.js";
 
 type HasuraRequest = {
-  action: { name: "triggerWorkflowRun" | "approveStep" };
+  action: { name: "triggerWorkflowRun" | "approveStep" | "createWebhookTrigger" };
   input: { workflow_id?: string; step_run_id?: string };
   session_variables?: Record<string, string>;
 };
@@ -11,6 +11,11 @@ export default async function handler(request: { body: HasuraRequest }, response
   try {
     const userId = request.body.session_variables?.["x-hasura-user-id"];
     if (!userId) throw new ActionError("Authentication is required", 401);
+    if (request.body.action.name === "createWebhookTrigger") {
+      if (!request.body.input.workflow_id) throw new ActionError("workflow_id is required");
+      response.json(await createWebhookTrigger(request.body.input.workflow_id, userId));
+      return;
+    }
     if (request.body.action.name === "triggerWorkflowRun") {
       if (!request.body.input.workflow_id) throw new ActionError("workflow_id is required");
       response.json(await createRun(request.body.input.workflow_id, userId, "manual"));
