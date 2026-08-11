@@ -12,7 +12,7 @@ FlowForge is an organization-isolated workflow builder using Nhost Auth, Postgre
 
 ## Function endpoints
 
-- `workflow-actions`: Hasura Actions `triggerWorkflowRun(workflow_id)`, `approveStep(step_run_id)`, and owner-only `createWebhookTrigger(workflow_id)`. The latter generates a plaintext secret once and stores only its SHA-256 hash.
+- `workflow-actions`: Hasura Actions `triggerWorkflowRun(workflow_id)`, `approveStep(step_run_id)`, and owner-only `createWebhookTrigger(workflow_id)`. Hasura invokes Actions through an HTTP webhook internally, so an error saying `http exception when calling webhook` can refer to these normal Actions and does not mean the optional workflow webhook trigger was used. The latter generates a plaintext secret once and stores only its SHA-256 hash.
 - `workflow-webhook`: `POST { "trigger_id", "secret", "payload" }`. Store only `sha256(secret)` in `workflow_triggers.secret_hash`; the secret should be shown to the owner once and never stored in `config`.
 - `notification-dispatch`: Hasura Event Trigger target for a `notification_outbox` insert. Set `NOTIFICATION_WEBHOOK_URL` to a Slack-compatible webhook or internal endpoint.
 

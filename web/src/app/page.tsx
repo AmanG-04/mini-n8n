@@ -65,6 +65,7 @@ export default function Home() {
   const [memberUserId, setMemberUserId] = useState("");
   const [memberRole, setMemberRole] = useState<"owner" | "editor" | "viewer">("viewer");
   const [stepTypeToAdd, setStepTypeToAdd] = useState<(typeof stepTypes)[number]>("llm_call");
+  const [startingRun, setStartingRun] = useState(false);
   const [stepRuns, setStepRuns] = useState<StepRun[]>([]);
   const [message, setMessage] = useState("");
   const [usage, setUsage] = useState({ quota_limit: 0, calls_used: 0, calls_remaining: 0 });
@@ -143,15 +144,26 @@ export default function Home() {
   }, [runId, token]);
 
   async function run() {
-    if (!selected) return;
-    const data = await graphQL<{ triggerWorkflowRun: { run_id: string } }>(mutation("Run", `($id:uuid!){triggerWorkflowRun(workflow_id:$id){run_id status}}`), { id: selected.id }, token);
-    setRunId(data.triggerWorkflowRun.run_id);
-    setMessage("Run started - live statuses below.");
+    if (!selected || startingRun) return;
+    setStartingRun(true);
+    setMessage("Starting workflow… please wait for the first step status.");
+    try {
+      const data = await graphQL<{ triggerWorkflowRun: { run_id: string } }>(mutation("Run", `($id:uuid!){triggerWorkflowRun(workflow_id:$id){run_id status}}`), { id: selected.id }, token);
+      setRunId(data.triggerWorkflowRun.run_id);
+      setMessage("Run started - live statuses below.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to start workflow.");
+    } finally {
+      setStartingRun(false);
+    }
   }
 
   async function runWorkflowById() {
+    if (startingRun) return;
     const workflowId = workflowIdToTest.trim();
     if (!workflowId) { setMessage("Paste a workflow UUID first."); return; }
+    setStartingRun(true);
+    setMessage("Starting workflow by ID… please wait.");
     try {
       const data = await graphQL<{ triggerWorkflowRun: { run_id: string } }>(mutation("RunById", `($id:uuid!){triggerWorkflowRun(workflow_id:$id){run_id status}}`), { id: workflowId }, token);
       setRunId(data.triggerWorkflowRun.run_id);
@@ -159,6 +171,8 @@ export default function Home() {
       setMessage("Workflow ID was authorized and the run started.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Workflow run was not allowed.");
+    } finally {
+      setStartingRun(false);
     }
   }
 
@@ -315,7 +329,7 @@ export default function Home() {
         {selected ? <>
           <div className="row workflow-heading">
             <div><h2>{selected.name}</h2><p>{selected.description || "No description"}</p></div>
-            {editable && <button className="primary-action" onClick={run}>Run workflow</button>}
+            {editable && <button className="primary-action" onClick={run} disabled={startingRun}>{startingRun ? "Starting…" : "Run workflow"}</button>}
           </div>
 
           <section className="workflow-section">
@@ -352,7 +366,7 @@ export default function Home() {
 
           {role === "owner" && <details className="secondary-panel"><summary>Organization members</summary><p>Manage membership by Auth user UUID. Email addresses stay server-side.</p><div className="row member-form"><input value={memberUserId} onChange={(e) => setMemberUserId(e.target.value)} placeholder="Auth user UUID" /><select value={memberRole} onChange={(e) => setMemberRole(e.target.value as "owner" | "editor" | "viewer")}><option value="owner">owner</option><option value="editor">editor</option><option value="viewer">viewer</option></select><button onClick={addMember}>Add/update member</button></div><div className="member-list">{currentOrg?.members.map((member) => <div className="member-row" key={member.user_id}><code>{member.user_id}</code><select value={member.role} onChange={(e) => void saveMember(member.user_id, e.target.value as "owner" | "editor" | "viewer")}><option value="owner">owner</option><option value="editor">editor</option><option value="viewer">viewer</option></select><button disabled={member.user_id === userId} onClick={() => void removeMember(member.user_id)}>Remove</button></div>)}</div></details>}
 
-          <details className="secondary-panel security-test"><summary>Authorization test</summary><p>Paste a workflow UUID from another organization. The server should reject it if this user is not a member.</p><p className="workflow-id">Current workflow ID: <code>{selected.id}</code></p><div className="row"><input value={workflowIdToTest} onChange={(e) => setWorkflowIdToTest(e.target.value)} placeholder="Workflow UUID to test" /><button onClick={runWorkflowById}>Run by ID</button></div></details>
+          <details className="secondary-panel security-test"><summary>Authorization test</summary><p>Paste a workflow UUID from another organization. The server should reject it if this user is not a member.</p><p className="workflow-id">Current workflow ID: <code>{selected.id}</code></p><div className="row"><input value={workflowIdToTest} onChange={(e) => setWorkflowIdToTest(e.target.value)} placeholder="Workflow UUID to test" /><button onClick={runWorkflowById} disabled={startingRun}>{startingRun ? "Starting…" : "Run by ID"}</button></div></details>
 
           <details className="secondary-panel history-panel"><summary>Run history <span className="muted">({selected.runs.length} runs)</span></summary>
             {selected.runs.length ? <div className="run-history">{selected.runs.map((runRecord) => <details className="run-history-item" key={runRecord.id}><summary><span className={'status ' + runRecord.status}>{runRecord.status}</span><b>{runRecord.trigger_type}</b><span>{formatExecutionTime(runRecord.created_at)}</span></summary><dl className="run-history-meta"><div><dt>Run ID</dt><dd>{runRecord.id}</dd></div><div><dt>Started</dt><dd>{formatExecutionTime(runRecord.started_at)}</dd></div><div><dt>Completed</dt><dd>{formatExecutionTime(runRecord.completed_at)}</dd></div><div><dt>Initiated by</dt><dd>{runRecord.initiated_by ?? "System/webhook"}</dd></div>{runRecord.error && <div className="execution-value"><dt>Error</dt><dd className="step-error">{runRecord.error}</dd></div>}</dl><button onClick={() => { setRunId(runRecord.id); setStepRuns([]); }}>View step details</button></details>)}</div> : <p className="muted">No runs yet.</p>}
