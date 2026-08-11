@@ -18,7 +18,7 @@ FlowForge is an organization-isolated workflow builder using Nhost Auth, Postgre
 
 ## Final demo procedure
 
-1. Sign in as Org A owner and select Org A. Create a workflow. Add `llm_call`, `conditional_branch`, `http_request`, and `approval_gate` in that order. Configure Groq to reply exactly `yes`, then use `{ "path": "text", "equals": "yes", "if_positions": [2], "else_positions": [] }`; positions listed in the non-selected branch are marked `skipped`.
+1. Sign in as Org A owner and select Org A. Create a workflow. Add `llm_call`, `conditional_branch`, `http_request`, and `approval_gate` in that order. Configure the LLM to choose exactly `yes` or `no` based on the input message (the UI provides this example), then use `{ "path": "text", "equals": "yes", "if_positions": [2], "else_positions": [] }`; positions listed in the non-selected branch are marked `skipped`. After adding a webhook trigger, send one webhook payload with `{ "message": "yes" }` to take the HTTP branch and another with `{ "message": "no" }` to demonstrate the comparison and skip it.
 2. Run it. The UI’s GraphQL WebSocket subscription updates each `step_runs` row without refresh. It pauses at the gate.
 3. Approve as the Org A owner/editor. The same run resumes and completes. Observe usage increment after completion.
 4. Add an owner-only webhook trigger in the UI. Copy the one-time secret and trigger ID from the dialog, then POST `{ "trigger_id": "...", "secret": "...", "payload": {} }` to `workflow-webhook`; it creates another run without a UI button.

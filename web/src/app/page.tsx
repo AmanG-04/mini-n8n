@@ -41,7 +41,7 @@ type StepRun = {
 const mutation = (name: string, body: string) => `mutation ${name} ${body}`;
 const stepTypes = ["llm_call", "http_request", "conditional_branch", "approval_gate", "db_write", "notify"] as const;
 const configExamples: Record<string, string> = {
-  llm_call: JSON.stringify({ prompt: "Reply with exactly the lowercase word yes and nothing else. Input: {{input}}", temperature: 0.2 }),
+  llm_call: JSON.stringify({ prompt: "Choose exactly one lowercase word: yes or no. Reply yes if the input message says yes; otherwise reply no. Do not add punctuation or explanation. Input: {{input}}", temperature: 0 }),
   // Postman Echo is used for the demo because it reliably echoes the request
   // body and is available over HTTPS without credentials.
   http_request: JSON.stringify({ url: "https://postman-echo.com/post", method: "POST", body: { input: "{{input}}" }, timeout_ms: 10000 }),

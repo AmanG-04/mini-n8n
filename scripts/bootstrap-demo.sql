@@ -8,7 +8,7 @@ INSERT INTO public.organizations (id, name, quota_limit) VALUES
 -- ('22222222-2222-4222-8222-222222222222','ORG_B_USER_AUTH_UUID','editor');
 
 -- Create a workflow as the Org A owner through the UI, then add:
--- 1. llm_call config: {"prompt":"Return true when this input is acceptable: {{input}}"}
+-- 1. llm_call config: {"prompt":"Choose exactly one lowercase word: yes or no. Reply yes if the input message says yes; otherwise reply no. Do not add punctuation or explanation. Input: {{input}}","temperature":0}
 -- 2. conditional_branch config: {"path":"text","equals":"yes","if_positions":[2],"else_positions":[]}
 -- 3. http_request config: {"url":"https://postman-echo.com/post","method":"POST","body":{"input":"{{input}}"},"timeout_ms":10000}
 -- 4. approval_gate config: {}
