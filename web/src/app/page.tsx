@@ -39,9 +39,12 @@ type StepRun = {
 };
 
 const mutation = (name: string, body: string) => `mutation ${name} ${body}`;
+const stepTypes = ["llm_call", "http_request", "conditional_branch", "approval_gate", "db_write", "notify"] as const;
 const configExamples: Record<string, string> = {
   llm_call: JSON.stringify({ prompt: "Reply with exactly the lowercase word yes and nothing else. Input: {{input}}", temperature: 0.2 }),
-  http_request: JSON.stringify({ url: "https://httpbin.org/post", method: "POST", body: { input: "{{input}}" }, timeout_ms: 10000 }),
+  // Postman Echo is used for the demo because it reliably echoes the request
+  // body and is available over HTTPS without credentials.
+  http_request: JSON.stringify({ url: "https://postman-echo.com/post", method: "POST", body: { input: "{{input}}" }, timeout_ms: 10000 }),
   conditional_branch: JSON.stringify({ path: "text", equals: "yes", if_positions: [2], else_positions: [] }),
   approval_gate: "{}",
   db_write: JSON.stringify({ label: "save workflow output" }),
@@ -61,6 +64,7 @@ export default function Home() {
   const [workflowIdToTest, setWorkflowIdToTest] = useState("");
   const [memberUserId, setMemberUserId] = useState("");
   const [memberRole, setMemberRole] = useState<"owner" | "editor" | "viewer">("viewer");
+  const [stepTypeToAdd, setStepTypeToAdd] = useState<(typeof stepTypes)[number]>("llm_call");
   const [stepRuns, setStepRuns] = useState<StepRun[]>([]);
   const [message, setMessage] = useState("");
   const [usage, setUsage] = useState({ quota_limit: 0, calls_used: 0, calls_remaining: 0 });
@@ -182,6 +186,17 @@ export default function Home() {
     }
   }
 
+  async function addSelectedStep() {
+    await addStep(stepTypeToAdd);
+  }
+
+  async function handleStepAction(step: Step, index: number, action: string) {
+    if (action === "config") await editStep(step);
+    if (action === "delete") await deleteStep(step);
+    if (action === "up") await moveStep(index, -1);
+    if (action === "down") await moveStep(index, 1);
+  }
+
   async function editStep(step: Step) {
     const raw = window.prompt(`Config JSON for ${step.type}. Example: ${configExamples[step.type] ?? "{}"}`, JSON.stringify(step.config));
     if (raw === null) return;
@@ -280,5 +295,71 @@ export default function Home() {
 
   if (!token) return <main className="auth"><h1>FlowForge</h1><p>Organization-safe AI workflow execution.</p><form onSubmit={login}><input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} /><input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} /><button>Sign in</button></form><small>{message}</small></main>;
 
-  return <main><header><h1>FlowForge</h1><select value={orgId} onChange={(e) => setOrgId(e.target.value)}>{orgs.map((o) => <option value={o.id} key={o.id}>{o.name}</option>)}</select><span className="badge">{role ?? "no role"}</span><span>Usage {usage.calls_used}/{usage.quota_limit}</span></header><section className="grid"><aside><div className="row"><h2>Workflows</h2>{editable && <button onClick={createWorkflow}>New</button>}</div>{workflows.map((w) => <button className={selected?.id === w.id ? "selected" : ""} onClick={() => setSelected(w)} key={w.id}>{w.name}<small>{w.runs[0]?.status ?? "not run"}</small></button>)}</aside><article>{selected ? <><div className="row"><div><h2>{selected.name}</h2><p>{selected.description || "No description"}</p></div>{editable && <button onClick={run}>Run</button>}</div><h3>Ordered steps</h3>{selected.steps.map((s, index) => <div className="step" key={s.id}><b>{s.position + 1}. {s.type}</b><span>{s.name}</span>{editable && <><button onClick={() => moveStep(index, -1)}>Up</button><button onClick={() => moveStep(index, 1)}>Down</button><button onClick={() => editStep(s)}>Config</button><button onClick={() => deleteStep(s)}>Delete</button></>}</div>)}{editable && <div className="row">{["llm_call", "http_request", "conditional_branch", "approval_gate", "db_write", "notify"].map((t) => <button key={t} onClick={() => addStep(t)}>+ {t}</button>)}</div>}<h3>Triggers</h3>{selected.triggers.map((t) => <div className="step" key={t.id}><b>{t.type}</b><span>{t.is_enabled ? "enabled" : "disabled"}</span></div>)}{editable && <div className="row">{!selected.triggers.some((trigger) => trigger.type === "manual") && <button onClick={() => addTrigger("manual")}>+ manual trigger</button>}{role === "owner" && <button onClick={() => addTrigger("webhook")}>{selected.triggers.some((trigger) => trigger.type === "webhook") ? "Regenerate webhook secret" : "+ webhook trigger"}</button>}</div>}{role === "owner" && <section className="member-management"><h3>Organization members</h3><p>Manage membership by Auth user UUID. Email addresses stay server-side.</p><div className="row"><input value={memberUserId} onChange={(e) => setMemberUserId(e.target.value)} placeholder="Auth user UUID" /><select value={memberRole} onChange={(e) => setMemberRole(e.target.value as "owner" | "editor" | "viewer")}><option value="owner">owner</option><option value="editor">editor</option><option value="viewer">viewer</option></select><button onClick={addMember}>Add/update member</button></div><div className="member-list">{currentOrg?.members.map((member) => <div className="member-row" key={member.user_id}><code>{member.user_id}</code><select value={member.role} onChange={(e) => void saveMember(member.user_id, e.target.value as "owner" | "editor" | "viewer")}><option value="owner">owner</option><option value="editor">editor</option><option value="viewer">viewer</option></select><button disabled={member.user_id === userId} onClick={() => void removeMember(member.user_id)}>Remove</button></div>)}</div></section>}<section className="security-test"><h3>Authorization test</h3><p>Paste a workflow UUID from another organization. The server should reject it if this user is not a member.</p><p className="workflow-id">Current workflow ID: <code>{selected.id}</code></p><div className="row"><input value={workflowIdToTest} onChange={(e) => setWorkflowIdToTest(e.target.value)} placeholder="Workflow UUID to test" /><button onClick={runWorkflowById}>Run by ID</button></div></section><h3>Run history ({selected.runs.length})</h3>{selected.runs.length ? <div className="run-history">{selected.runs.map((runRecord) => <details className="run-history-item" key={runRecord.id}><summary><span className={'status ' + runRecord.status}>{runRecord.status}</span><b>{runRecord.trigger_type}</b><span>{formatExecutionTime(runRecord.created_at)}</span></summary><dl className="run-history-meta"><div><dt>Run ID</dt><dd>{runRecord.id}</dd></div><div><dt>Started</dt><dd>{formatExecutionTime(runRecord.started_at)}</dd></div><div><dt>Completed</dt><dd>{formatExecutionTime(runRecord.completed_at)}</dd></div><div><dt>Initiated by</dt><dd>{runRecord.initiated_by ?? "System/webhook"}</dd></div>{runRecord.error && <div className="execution-value"><dt>Error</dt><dd className="step-error">{runRecord.error}</dd></div>}</dl><button onClick={() => { setRunId(runRecord.id); setStepRuns([]); }}>View step details</button></details>)}</div> : <p className="muted">No runs yet.</p>}<h3>Live execution {runId && `(${runId.slice(0, 8)})`}</h3>{stepRuns.map((s) => <div className="step execution-step" key={s.id}><div className="execution-summary"><b>{s.position + 1}. {s.type}</b><span className={'status ' + (s.status ?? "")}>{s.status}</span><span className="attempt-count">attempts: {s.attempt_count}</span>{s.status === "paused" && editable && <button onClick={() => approve(s.id)}>Approve</button>}</div>{s.error && <small className="step-error">{s.error}</small>}<details className="execution-details"><summary>Execution details</summary><dl className="execution-meta"><div><dt>Status</dt><dd>{s.status}</dd></div><div><dt>Attempts</dt><dd>{s.attempt_count}</dd></div><div><dt>Started</dt><dd>{formatExecutionTime(s.started_at)}</dd></div><div><dt>Completed</dt><dd>{formatExecutionTime(s.completed_at)}</dd></div>{s.type === "approval_gate" && <><div><dt>Approved by</dt><dd>{s.approved_by ?? "Pending approval"}</dd></div><div><dt>Approved at</dt><dd>{formatExecutionTime(s.approved_at)}</dd></div></>}<div className="execution-value"><dt>Input</dt><dd><pre>{formatExecutionValue(s.input)}</pre></dd></div><div className="execution-value"><dt>Output</dt><dd><pre>{formatExecutionValue(s.output)}</pre></dd></div></dl></details></div>)}</> : <p>Create or select a workflow.</p>}</article></section><footer>{message}</footer></main>;
+  return <main>
+    <header>
+      <h1>FlowForge</h1>
+      <select aria-label="Organization" value={orgId} onChange={(e) => setOrgId(e.target.value)}>
+        {orgs.map((o) => <option value={o.id} key={o.id}>{o.name}</option>)}
+      </select>
+      <span className="badge">{role ?? "no role"}</span>
+      <span>Usage {usage.calls_used}/{usage.quota_limit}</span>
+    </header>
+    <section className="grid">
+      <aside>
+        <div className="row"><h2>Workflows</h2>{editable && <button onClick={createWorkflow}>New</button>}</div>
+        {workflows.map((w) => <button className={selected?.id === w.id ? "selected" : ""} onClick={() => setSelected(w)} key={w.id}>
+          <span>{w.name}</span><small>{w.runs[0]?.status ?? "not run"}</small>
+        </button>)}
+      </aside>
+      <article>
+        {selected ? <>
+          <div className="row workflow-heading">
+            <div><h2>{selected.name}</h2><p>{selected.description || "No description"}</p></div>
+            {editable && <button className="primary-action" onClick={run}>Run workflow</button>}
+          </div>
+
+          <section className="workflow-section">
+            <div className="section-heading"><div><h3>Workflow steps</h3><p className="muted">Runs sequentially from top to bottom.</p></div></div>
+            {selected.steps.length ? selected.steps.map((s, index) => <div className="step workflow-step" key={s.id}>
+              <span className="step-number">{s.position + 1}</span><div className="step-label"><b>{s.type}</b><span>{s.name}</span></div>
+              {editable && <select className="step-actions" aria-label={`Actions for step ${s.position + 1}`} defaultValue="" onChange={(e) => void handleStepAction(s, index, e.target.value)}>
+                <option value="" disabled>Actions</option><option value="config">Edit config</option><option value="up" disabled={index === 0}>Move up</option><option value="down" disabled={index === selected.steps.length - 1}>Move down</option><option value="delete">Delete step</option>
+              </select>}
+            </div>) : <p className="muted empty-state">No steps yet. Add one below.</p>}
+            {editable && <div className="add-step-controls"><select aria-label="Step type" value={stepTypeToAdd} onChange={(e) => setStepTypeToAdd(e.target.value as (typeof stepTypes)[number])}>{stepTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select><button onClick={addSelectedStep}>Add step</button></div>}
+          </section>
+
+          <section className="live-panel workflow-section">
+            <div className="section-heading"><div><h3>Live execution</h3><p className="muted">Select a run to inspect each step as it updates.</p></div>
+              <select aria-label="Execution run" value={runId} onChange={(e) => { setRunId(e.target.value); setStepRuns([]); }}>
+                <option value="">Select run</option>
+                {runId && !selected.runs.some((r) => r.id === runId) && <option value={runId}>Current run ({runId.slice(0, 8)})</option>}
+                {selected.runs.map((runRecord) => <option value={runRecord.id} key={runRecord.id}>{runRecord.status} · {formatExecutionTime(runRecord.created_at)}</option>)}
+              </select>
+            </div>
+            {stepRuns.length ? <div className="execution-list">{stepRuns.map((s) => <div className="step execution-step" key={s.id}>
+              <div className="execution-summary"><span className="step-number">{s.position + 1}</span><b>{s.type}</b><span className={'status ' + (s.status ?? "")}>{s.status}</span><span className="attempt-count">{s.attempt_count} attempt{s.attempt_count === 1 ? "" : "s"}</span>{s.status === "paused" && editable && <button onClick={() => approve(s.id)}>Approve</button>}</div>
+              {s.error && <small className="step-error">{s.error}</small>}
+              <details className="execution-details"><summary>Step details</summary><dl className="execution-meta"><div><dt>Status</dt><dd>{s.status}</dd></div><div><dt>Attempts</dt><dd>{s.attempt_count}</dd></div><div><dt>Started</dt><dd>{formatExecutionTime(s.started_at)}</dd></div><div><dt>Completed</dt><dd>{formatExecutionTime(s.completed_at)}</dd></div>{s.type === "approval_gate" && <><div><dt>Approved by</dt><dd>{s.approved_by ?? "Pending approval"}</dd></div><div><dt>Approved at</dt><dd>{formatExecutionTime(s.approved_at)}</dd></div></>}<div className="execution-value"><dt>Input</dt><dd><pre>{formatExecutionValue(s.input)}</pre></dd></div><div className="execution-value"><dt>Output</dt><dd><pre>{formatExecutionValue(s.output)}</pre></dd></div></dl></details>
+            </div>)}</div> : <p className="muted empty-state">Run the workflow or choose a run above to see step status.</p>}
+          </section>
+
+          <section className="workflow-section">
+            <div className="section-heading"><div><h3>Triggers</h3><p className="muted">Start this workflow manually or through its webhook.</p></div></div>
+            {selected.triggers.map((t) => <div className="step trigger-row" key={t.id}><b>{t.type}</b><span className={'status ' + (t.is_enabled ? "completed" : "")}>{t.is_enabled ? "enabled" : "disabled"}</span></div>)}
+            {editable && <div className="add-step-controls"><select aria-label="Trigger type" defaultValue=""><option value="" disabled>Add trigger...</option>{!selected.triggers.some((trigger) => trigger.type === "manual") && <option value="manual">Manual trigger</option>}{role === "owner" && <option value="webhook">Webhook trigger</option>}</select><button onClick={(e) => { const select = e.currentTarget.previousElementSibling as HTMLSelectElement | null; if (select?.value) { void addTrigger(select.value as "manual" | "webhook"); select.value = ""; } }}>Add trigger</button></div>}
+          </section>
+
+          {role === "owner" && <details className="secondary-panel"><summary>Organization members</summary><p>Manage membership by Auth user UUID. Email addresses stay server-side.</p><div className="row member-form"><input value={memberUserId} onChange={(e) => setMemberUserId(e.target.value)} placeholder="Auth user UUID" /><select value={memberRole} onChange={(e) => setMemberRole(e.target.value as "owner" | "editor" | "viewer")}><option value="owner">owner</option><option value="editor">editor</option><option value="viewer">viewer</option></select><button onClick={addMember}>Add/update member</button></div><div className="member-list">{currentOrg?.members.map((member) => <div className="member-row" key={member.user_id}><code>{member.user_id}</code><select value={member.role} onChange={(e) => void saveMember(member.user_id, e.target.value as "owner" | "editor" | "viewer")}><option value="owner">owner</option><option value="editor">editor</option><option value="viewer">viewer</option></select><button disabled={member.user_id === userId} onClick={() => void removeMember(member.user_id)}>Remove</button></div>)}</div></details>}
+
+          <details className="secondary-panel security-test"><summary>Authorization test</summary><p>Paste a workflow UUID from another organization. The server should reject it if this user is not a member.</p><p className="workflow-id">Current workflow ID: <code>{selected.id}</code></p><div className="row"><input value={workflowIdToTest} onChange={(e) => setWorkflowIdToTest(e.target.value)} placeholder="Workflow UUID to test" /><button onClick={runWorkflowById}>Run by ID</button></div></details>
+
+          <details className="secondary-panel history-panel"><summary>Run history <span className="muted">({selected.runs.length} runs)</span></summary>
+            {selected.runs.length ? <div className="run-history">{selected.runs.map((runRecord) => <details className="run-history-item" key={runRecord.id}><summary><span className={'status ' + runRecord.status}>{runRecord.status}</span><b>{runRecord.trigger_type}</b><span>{formatExecutionTime(runRecord.created_at)}</span></summary><dl className="run-history-meta"><div><dt>Run ID</dt><dd>{runRecord.id}</dd></div><div><dt>Started</dt><dd>{formatExecutionTime(runRecord.started_at)}</dd></div><div><dt>Completed</dt><dd>{formatExecutionTime(runRecord.completed_at)}</dd></div><div><dt>Initiated by</dt><dd>{runRecord.initiated_by ?? "System/webhook"}</dd></div>{runRecord.error && <div className="execution-value"><dt>Error</dt><dd className="step-error">{runRecord.error}</dd></div>}</dl><button onClick={() => { setRunId(runRecord.id); setStepRuns([]); }}>View step details</button></details>)}</div> : <p className="muted">No runs yet.</p>}
+          </details>
+        </> : <p>Create or select a workflow.</p>}
+      </article>
+    </section>
+    <footer>{message}</footer>
+  </main>;
 }
