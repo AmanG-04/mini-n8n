@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createClient } from "graphql-ws";
 import { graphQL, ORGANIZATIONS, STEP_RUNS, STEP_RUNS_QUERY, WORKFLOWS } from "../lib/graphql";
 
 type Org = { id: string; name: string; members: { user_id: string; role: "owner" | "editor" | "viewer" }[] };
@@ -40,6 +41,15 @@ type StepRun = {
 
 const mutation = (name: string, body: string) => `mutation ${name} ${body}`;
 const stepTypes = ["llm_call", "http_request", "conditional_branch", "approval_gate", "db_write", "notify"] as const;
+
+function graphqlWebSocketUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_NHOST_GRAPHQL_WS_URL;
+  if (configured) return configured;
+  const graphqlUrl = process.env.NEXT_PUBLIC_NHOST_GRAPHQL_URL;
+  if (graphqlUrl) return graphqlUrl.replace(/^http/i, "ws");
+  return "ws://localhost:1337/v1/graphql";
+}
+
 const configExamples: Record<string, string> = {
   llm_call: JSON.stringify({ prompt: "Choose exactly one lowercase word: yes or no. Reply yes if the input message says yes; otherwise reply no. Do not add punctuation or explanation. Input: {{input}}", temperature: 0 }),
   // Postman Echo is used for the demo because it reliably echoes the request
@@ -126,21 +136,29 @@ export default function Home() {
     if (!runId || !token) return;
     void loadStepRuns(runId);
     const refresh = window.setInterval(() => void loadStepRuns(runId), 1000);
-    const ws = new WebSocket((process.env.NEXT_PUBLIC_NHOST_GRAPHQL_WS_URL ?? "ws://localhost:1337/v1/graphql").replace("http", "ws"), "graphql-transport-ws");
-    ws.onopen = () => ws.send(JSON.stringify({ type: "connection_init", payload: { headers: { authorization: `Bearer ${token}` } } }));
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "connection_ack") {
-        ws.send(JSON.stringify({ id: "steps", type: "subscribe", payload: { query: STEP_RUNS, variables: { id: runId } } }));
-      } else if (data.type === "error") {
-        setMessage("Live subscription error; automatic status refresh is active.");
-      } else if (data.payload?.data) {
-        setStepRuns(data.payload.data.step_runs);
-        if (["completed", "failed"].includes(data.payload.data.workflow_runs_by_pk?.status)) void loadWorkflows();
+    const wsClient = createClient({
+      url: graphqlWebSocketUrl(),
+      connectionParams: { headers: { authorization: `Bearer ${token}` } },
+      retryAttempts: 3
+    });
+    const unsubscribe = wsClient.subscribe<{ step_runs: StepRun[]; workflow_runs_by_pk: { status: string } | null }>(
+      { query: STEP_RUNS, variables: { id: runId } },
+      {
+        next: (result) => {
+          if (result.errors?.length) {
+            setMessage("Live subscription error; automatic status refresh is active.");
+            return;
+          }
+          if (result.data) {
+            setStepRuns(result.data.step_runs);
+            if (["completed", "failed"].includes(result.data.workflow_runs_by_pk?.status ?? "")) void loadWorkflows();
+          }
+        },
+        error: () => setMessage("Live subscription unavailable; automatic status refresh is active."),
+        complete: () => undefined
       }
-    };
-    ws.onerror = () => setMessage("Live subscription unavailable; automatic status refresh is active.");
-    return () => { window.clearInterval(refresh); ws.close(); };
+    );
+    return () => { window.clearInterval(refresh); unsubscribe(); wsClient.dispose(); };
   }, [runId, token]);
 
   async function run() {
