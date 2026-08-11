@@ -7,7 +7,7 @@ export async function graphQL<T>(query: string, variables: Record<string, unknow
   return body.data as T;
 }
 
-export const WORKFLOWS = `query Workflows($org: uuid!) { workflows(where:{org_id:{_eq:$org}}, order_by:{updated_at:desc}) { id name description is_enabled steps(order_by:{position:asc}) { id position type name config } triggers { id type is_enabled config } runs(limit:1,order_by:{created_at:desc}) { id status created_at } } organization_usage_monthly(where:{org_id:{_eq:$org}}) { quota_limit calls_used calls_remaining } }`;
+export const WORKFLOWS = `query Workflows($org: uuid!) { workflows(where:{org_id:{_eq:$org}}, order_by:{updated_at:desc}) { id name description is_enabled steps(order_by:{position:asc}) { id position type name config } triggers { id type is_enabled config } runs(order_by:{created_at:desc}) { id trigger_type status error initiated_by created_at started_at completed_at } } organization_usage_monthly(where:{org_id:{_eq:$org}}) { quota_limit calls_used calls_remaining } }`;
 export const ORGANIZATIONS = `query Organizations { organizations { id name members { user_id role } } }`;
 const STEP_RUN_FIELDS = `id position type status input output error attempt_count approved_by approved_at started_at completed_at`;
 export const STEP_RUNS = `subscription StepRuns($id: uuid!) { step_runs(where:{workflow_run_id:{_eq:$id}},order_by:{position:asc}) { ${STEP_RUN_FIELDS} } workflow_runs_by_pk(id:$id) { id status error } }`;
