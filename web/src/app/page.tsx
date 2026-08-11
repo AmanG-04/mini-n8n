@@ -177,8 +177,15 @@ export default function Home() {
   }
 
   async function approve(id: string) {
-    await graphQL(mutation("Approve", `($id:uuid!){approveStep(step_run_id:$id){run_id status}}`), { id }, token);
-    setMessage("Approval accepted; execution resumed.");
+    try {
+      setMessage("Approval submitted; resuming workflow…");
+      const data = await graphQL<{ approveStep: { run_id: string; status: string } }>(mutation("Approve", `($id:uuid!){approveStep(step_run_id:$id){run_id status}}`), { id }, token);
+      setRunId(data.approveStep.run_id);
+      await loadStepRuns(data.approveStep.run_id);
+      setMessage("Approval accepted; execution resumed.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to approve this step.");
+    }
   }
 
   async function createWorkflow() {
