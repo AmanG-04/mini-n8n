@@ -272,7 +272,11 @@ export default function Home() {
     try { return JSON.stringify(value, null, 2) ?? "-"; } catch { return String(value); }
   }
 
-  function formatExecutionTime(value: string | null): string { return value ? new Date(value).toLocaleString() : "-"; }
+  function formatExecutionTime(value: string | null): string {
+    return value
+      ? new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "medium" }).format(new Date(value)) + " IST"
+      : "-";
+  }
 
   if (!token) return <main className="auth"><h1>FlowForge</h1><p>Organization-safe AI workflow execution.</p><form onSubmit={login}><input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} /><input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} /><button>Sign in</button></form><small>{message}</small></main>;
 
